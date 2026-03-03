@@ -6,7 +6,6 @@ Adds actual numbers, recomputes combo indices, preserves hasWinner flags.
 
 import json
 import urllib.request
-import re
 from math import comb
 
 # --- Combo index calculation ---
@@ -25,27 +24,19 @@ def combo_index(numbers, powerball):
     white_index = comb(b5, 5) + comb(b4, 4) + comb(b3, 3) + comb(b2, 2) + comb(b1, 1)
     return white_index * 26 + (powerball - 1)
 
-# --- Load existing hasWinner data from the HTML file ---
-print("Loading existing winner flags from HTML...")
-with open('index.html', 'r') as f:
-    content = f.read()
+# --- Load hasWinner data from Texas Lottery (authoritative source) ---
+print("Loading winner flags from Texas Lottery data...")
+with open('texas_winners.json', 'r') as f:
+    texas_winners = json.load(f)
 
-# Extract all {date, hasWinner} pairs from existing data
-existing_winners = {}
-pattern = r'"date":\s*"([^"]+)"[^}]*"hasWinner":\s*(true|false)'
-for m in re.finditer(pattern, content):
-    date = m.group(1)
-    has_winner = m.group(2) == 'true'
-    existing_winners[date] = has_winner
+print(f"  Loaded {len(texas_winners)} draws from Texas Lottery")
+print(f"  Winners: {sum(texas_winners.values())}")
 
-print(f"  Found {len(existing_winners)} existing draws with winner flags")
-print(f"  Winners: {sum(existing_winners.values())}")
-
-# New jackpot winners in the gap period
-new_winners = {
-    '2025-12-24': True,  # $1.8B Arkansas
-    '2026-01-21': True,  # $209.3M North Carolina
-}
+# Manually patched draws missing from NY Open Data
+# 2022-11-07: $2.04B record jackpot — not in NY dataset
+manual_draws = [
+    {'date': '2022-11-07', 'numbers': [10, 33, 41, 47, 56], 'powerball': 10, 'hasWinner': True},
+]
 
 # --- Fetch all draws from NY Open Data (from Oct 2015 onwards) ---
 print("\nFetching data from NY Open Data...")
@@ -81,13 +72,8 @@ for row in raw:
     # Compute combo index
     idx = combo_index(whites, pb)
     
-    # Determine hasWinner
-    if date in new_winners:
-        has_winner = new_winners[date]
-    elif date in existing_winners:
-        has_winner = existing_winners[date]
-    else:
-        has_winner = False  # Default for unknown
+    # Determine hasWinner from Texas Lottery data
+    has_winner = texas_winners.get(date, False)
     
     data.append({
         'date': date,
@@ -97,16 +83,26 @@ for row in raw:
         'hasWinner': has_winner
     })
 
+# Add manually patched draws
+for m in manual_draws:
+    if not any(d['date'] == m['date'] for d in data):
+        idx = combo_index(m['numbers'], m['powerball'])
+        data.append({**m, 'comboIndex': idx})
+        print(f"  + Manual patch: {m['date']} {m['numbers']} PB:{m['powerball']} winner:{m['hasWinner']}")
+
+data.sort(key=lambda d: d['date'])
 print(f"  Built {len(data)} draws (skipped {skipped})")
 print(f"  Date range: {data[0]['date']} to {data[-1]['date']}")
 print(f"  Jackpot winners: {sum(d['hasWinner'] for d in data)}")
 
-# Verify our known winners are in the data
-for date, expected in {**existing_winners, **new_winners}.items():
-    if expected:
-        match = [d for d in data if d['date'] == date and d['hasWinner']]
-        if match:
-            print(f"  ✓ Winner on {date}: {match[0]['numbers']} PB:{match[0]['powerball']}")
+# Verify some known winners are in the data
+known_winners = {'2025-12-24', '2026-01-21', '2016-01-13', '2022-11-07'}
+for date in known_winners:
+    match = [d for d in data if d['date'] == date and d['hasWinner']]
+    if match:
+        print(f"  ✓ Winner on {date}: {match[0]['numbers']} PB:{match[0]['powerball']}")
+    else:
+        print(f"  ✗ Missing winner on {date}")
 
 # Save as JSON for inspection
 with open('powerball_data.json', 'w') as f:
