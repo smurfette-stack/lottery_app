@@ -346,52 +346,49 @@
     });
 
     // --- Chart ---
+    const labels = data.map(d => d.date);
+    const indices = data.map(d => d.comboIndex);
+    const pointColors = data.map(d => d.hasWinner ? 'rgba(231,76,60,1)' : 'rgba(52,152,219,0.7)');
+    const pointBorders = data.map(d => d.hasWinner ? 'rgba(231,76,60,1)' : 'rgba(52,152,219,1)');
+    const pointRadii = data.map(d => d.hasWinner ? 6 : 3);
+
     const ctx = document.getElementById('powerballChart').getContext('2d');
     new Chart(ctx, {
-      type: 'scatter',
+      type: 'line',
       data: {
-        datasets: [
-          {
-            label: 'No Jackpot Winner',
-            data: data.filter(d => !d.hasWinner).map(d => ({ x: d.date, y: d.comboIndex })),
-            backgroundColor: 'rgba(52, 152, 219, 0.6)',
-            pointRadius: 3,
-            pointHoverRadius: 6,
-          },
-          {
-            label: 'Jackpot Winner',
-            data: data.filter(d => d.hasWinner).map(d => ({ x: d.date, y: d.comboIndex })),
-            backgroundColor: 'rgba(231, 76, 60, 0.9)',
-            pointRadius: 6,
-            pointHoverRadius: 9,
-            pointStyle: 'star',
-          }
-        ]
+        labels: labels,
+        datasets: [{
+          label: 'Winning Combo Index',
+          data: indices,
+          borderColor: 'rgba(52,152,219,0.4)',
+          borderWidth: 1,
+          pointBackgroundColor: pointColors,
+          pointBorderColor: pointBorders,
+          pointRadius: pointRadii,
+          pointHoverRadius: 8,
+          fill: false,
+          tension: 0
+        }]
       },
       options: {
         responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 2.5,
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.8)',
             callbacks: {
-              title: ctx => {
-                const idx = ctx[0].dataIndex;
-                const isWinner = ctx[0].dataset.label === 'Jackpot Winner';
-                const match = data.find(d => d.date === ctx[0].raw.x && d.hasWinner === isWinner);
-                return match ? match.date : ctx[0].raw.x;
-              },
+              title: ctx => 'Draw Date: ' + data[ctx[0].dataIndex].date,
               label: ctx => {
-                const isWinner = ctx.dataset.label === 'Jackpot Winner';
-                const match = data.find(d => d.date === ctx.raw.x && d.hasWinner === isWinner);
-                if (!match) return '';
-                const nums = match.numbers.join(', ');
-                const pct = ((match.comboIndex / 292201338) * 100).toFixed(2);
+                const d = data[ctx.dataIndex];
+                const pct = ((d.comboIndex / 292201338) * 100).toFixed(4);
                 return [
-                  `Numbers: ${nums} | PB: ${match.powerball}`,
-                  `Combo Index: ${match.comboIndex.toLocaleString()}`,
+                  `Numbers: ${d.numbers.join(', ')} | PB: ${d.powerball}`,
+                  `Combo Index: ${d.comboIndex.toLocaleString()}`,
                   `Position: ${pct}% through combo space`,
-                  isWinner ? '🏆 JACKPOT WINNER' : ''
-                ].filter(Boolean);
+                  d.hasWinner ? '🎉 Jackpot Winner!' : 'No Jackpot Winner'
+                ];
               }
             }
           }
@@ -401,18 +398,16 @@
             type: 'time',
             time: { unit: 'month', displayFormats: { month: 'MMM yyyy' } },
             grid: { color: 'rgba(255,255,255,0.05)' },
-            ticks: { color: '#8892b0' },
-            title: { display: true, text: 'Draw Date', color: '#8892b0' }
+            ticks: { color: '#8892b0', maxTicksLimit: 20 },
+            title: { display: true, text: 'Draw Date', color: '#8892b0', font: { size: 14 } }
           },
           y: {
-            min: 0,
-            max: 292201338,
             grid: { color: 'rgba(255,255,255,0.05)' },
             ticks: {
               color: '#8892b0',
               callback: v => (v / 1e6).toFixed(0) + 'M'
             },
-            title: { display: true, text: 'Combination Index', color: '#8892b0' }
+            title: { display: true, text: 'Winning Combo Index', color: '#8892b0', font: { size: 14 } }
           }
         }
       }
